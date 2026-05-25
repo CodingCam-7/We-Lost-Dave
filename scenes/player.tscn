@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://bwbbw0v2ckwva"]
+
+[ext_resource type="Script" uid="uid://upkytyd0ndy1" path="res://scripts/player.gd" id="1_3vyb7"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_f60y1"]
+
+[node name="Player" type="CharacterBody2D" unique_id=1677727474]
+motion_mode = 1
+script = ExtResource("1_3vyb7")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=188382113]
+shape = SubResource("CapsuleShape2D_f60y1")
+
+[node name="Polygon2D" type="Polygon2D" parent="." unique_id=2102640688]
+color = Color(0.10980392, 1, 0.6, 1)
+polygon = PackedVector2Array(0, -65, 90, 0, 2, 114, -78, 0)
