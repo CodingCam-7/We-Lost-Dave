@@ -1,23 +1,30 @@
 extends Node2D
 
-const WALL_T := 24.0
-const HALF_C := 60.0   # half of 120px corridor width
+# ─────────────────────────────────────────────────────────────────────────────
+#  HOUSE — FIRST FLOOR
+#
+#  Origin (0, 0) = centre of Living Room.
+#  Y increases southward.  X increases eastward.
+#
+#  STEP 1 (this file):  front yard · gate · path · porch · foyer · living room
+#  Remaining rooms will be added in subsequent steps.
+# ─────────────────────────────────────────────────────────────────────────────
 
-const COLOR_FLOOR     := Color("#2a2a2a")
-const COLOR_WALL      := Color("#3a3a3a")
-const COLOR_WORKBENCH := Color(0.62, 0.44, 0.14)
-const COLOR_CASEBOARD := Color(0.14, 0.30, 0.62)
-const COLOR_REST      := Color(0.28, 0.52, 0.28)
-const COLOR_STASH     := Color(0.44, 0.44, 0.44)
-const COLOR_CHEST     := Color(0.62, 0.44, 0.08)
+const WALL_T := 24.0
+
+const COLOR_WALL    := Color(0.22, 0.22, 0.22)
+const COLOR_OUTDOOR := Color(0.10, 0.15, 0.08)   # dark grass
+const COLOR_PATH    := Color(0.21, 0.19, 0.16)   # dark stone path / porch slab
+const COLOR_FOYER   := Color(0.18, 0.14, 0.09)   # warm amber-dark
+const COLOR_LIVING  := Color(0.15, 0.11, 0.07)   # warm brown-dark
 
 var _enemy_scene := preload("res://scenes/enemy.tscn")
 
 func _ready() -> void:
 	_build_darkness()
-	_build_layout()
-	_place_stations()
-	_place_chests()
+	_build_front_yard()
+	_build_foyer()
+	_build_living_room()
 	_spawn_enemies()
 	_start_ambient()
 
@@ -29,146 +36,94 @@ func _build_darkness() -> void:
 	mod.color = Color(0.0, 0.0, 0.05)
 	add_child(mod)
 
-# ── Layout ─────────────────────────────────────────────────────────────────────
+# ── Front Yard · Gate · Path · Covered Porch ──────────────────────────────────
 #
-#  Hub:     600×500  centred on origin
-#  Study:   320×280  north  (y: -680 → -400)
-#  Kitchen: 280×280  east   (x:  450 →  730)
-#  Bedroom: 280×280  west   (x: -730 → -450)
-#  Garage:  320×280  south  (y:  400 →  680)
-#  Corridors: 120px wide, 150px long, connecting each room to the hub
+#  Property south fence:  y = 1100   gate opening at x: -90 → 90
+#  Gate pillars:          x = ±115,  y ≈ 1058
+#  Front path:            x: -90 → 90,    y: 590 → 1060   (180 × 470)
+#  Covered porch slab:    x: -200 → 200,  y: 470 → 590    (400 × 120)
+#  Side fences:           x = ±700,       y: 470 → 1100
 
-func _build_layout() -> void:
-	_build_hub()
-	_build_corridor(Rect2(-HALF_C, -400,    HALF_C * 2, 150), false)  # north
-	_build_study()
-	_build_corridor(Rect2( 300,    -HALF_C, 150, HALF_C * 2), true)   # east
-	_build_kitchen()
-	_build_corridor(Rect2(-450,    -HALF_C, 150, HALF_C * 2), true)   # west
-	_build_bedroom()
-	_build_corridor(Rect2(-HALF_C,  250,    HALF_C * 2, 150), false)  # south
-	_build_garage()
+func _build_front_yard() -> void:
+	# Full outdoor ground (rendered first so path/porch overlay it)
+	_floor_rect(Rect2(-700, 470, 1400, 630), COLOR_OUTDOOR)
 
-func _build_hub() -> void:
-	_floor_rect(Rect2(-300, -250, 600, 500))
-	_wall_h(-300,    -HALF_C, -250);  _wall_h( HALF_C,  300, -250)  # top
-	_wall_h(-300,    -HALF_C,  250);  _wall_h( HALF_C,  300,  250)  # bottom
-	_wall_v(-250,    -HALF_C, -300);  _wall_v( HALF_C,  250, -300)  # left
-	_wall_v(-250,    -HALF_C,  300);  _wall_v( HALF_C,  250,  300)  # right
+	# Stone path up to porch
+	_floor_rect(Rect2(-90, 590, 180, 470), COLOR_PATH)
 
-func _build_corridor(rect: Rect2, horizontal: bool) -> void:
-	_floor_rect(rect)
-	if horizontal:
-		_wall_h(rect.position.x, rect.end.x, rect.position.y)
-		_wall_h(rect.position.x, rect.end.x, rect.end.y)
-	else:
-		_wall_v(rect.position.y, rect.end.y, rect.position.x)
-		_wall_v(rect.position.y, rect.end.y, rect.end.x)
+	# Covered front porch slab
+	_floor_rect(Rect2(-200, 470, 400, 120), COLOR_PATH)
 
-func _build_study() -> void:
-	_floor_rect(Rect2(-160, -680, 320, 280))
-	_wall_h(-160,    160,    -680)                             # top — full
-	_wall_v(-680,   -400,   -160);  _wall_v(-680, -400, 160)  # sides — full
-	_wall_h(-160,   -HALF_C, -400); _wall_h(HALF_C, 160, -400) # bottom — gapped
+	# Property south fence — gap at x: -90 → 90 for gate
+	_wall_h(-700, -90, 1100)
+	_wall_h(  90, 700, 1100)
 
-func _build_kitchen() -> void:
-	_floor_rect(Rect2(450, -140, 280, 280))
-	_wall_h( 450,  730, -140);  _wall_h( 450,  730, 140)     # top/bottom — full
-	_wall_v(-140,  140,  730)                                  # right — full
-	_wall_v(-140, -HALF_C, 450); _wall_v(HALF_C, 140, 450)   # left — gapped
+	# Gate pillars
+	add_child(_make_wall(Vector2(-115, 1058), Vector2(28, 84)))
+	add_child(_make_wall(Vector2( 115, 1058), Vector2(28, 84)))
 
-func _build_bedroom() -> void:
-	_floor_rect(Rect2(-730, -140, 280, 280))
-	_wall_h(-730, -450, -140);  _wall_h(-730, -450, 140)     # top/bottom — full
-	_wall_v(-140,  140, -730)                                  # left — full
-	_wall_v(-140, -HALF_C, -450); _wall_v(HALF_C, 140, -450) # right — gapped
+	# Property side fences (south portion — extended northward each step)
+	_wall_v(470, 1100, -700)   # west
+	_wall_v(470, 1100,  700)   # east
 
-func _build_garage() -> void:
-	_floor_rect(Rect2(-160, 400, 320, 280))
-	_wall_h(-160,  160,  680)                                  # bottom — full
-	_wall_v( 400,  680, -160);  _wall_v(400, 680, 160)        # sides — full
-	_wall_h(-160, -HALF_C, 400); _wall_h(HALF_C, 160, 400)   # top — gapped
+# ── Foyer ──────────────────────────────────────────────────────────────────────
+#
+#  x: -120 → 120   y: 250 → 470   (240 × 220)
+#  Connections:
+#    north  → Living Room  gap x: -80 → 80  (wall owned by _build_living_room)
+#    south  → front door   gap x: -60 → 60
 
-# ── Stations ───────────────────────────────────────────────────────────────────
+func _build_foyer() -> void:
+	_floor_rect(Rect2(-120, 250, 240, 220), COLOR_FOYER)
 
-func _place_stations() -> void:
-	_make_station(Vector2(  0, -560), Vector2(80, 40), COLOR_CASEBOARD, "case_board")
-	_make_station(Vector2(590,    0), Vector2(50, 70), COLOR_WORKBENCH, "workbench")
-	_make_station(Vector2(-590,   0), Vector2(90, 50), COLOR_REST,      "rest_point")
-	_make_station(Vector2(  0,  560), Vector2(70, 50), COLOR_STASH,     "stash")
+	# East / west walls — full foyer height
+	_wall_v(250, 470,  120)
+	_wall_v(250, 470, -120)
 
-func _make_station(center: Vector2, size: Vector2, color: Color, station_id: String) -> void:
-	var body := StaticBody2D.new()
-	body.name = station_id
-	body.position = center
-	body.add_to_group("station")
+	# South wall — front-door gap at x: -60 → 60
+	_wall_h(-120, -60, 470)
+	_wall_h(  60, 120, 470)
 
-	var half := size / 2.0
-	var vis  := Polygon2D.new()
-	vis.color   = color
-	vis.polygon = PackedVector2Array([
-		Vector2(-half.x, -half.y), Vector2(half.x, -half.y),
-		Vector2( half.x,  half.y), Vector2(-half.x, half.y),
-	])
-	body.add_child(vis)
+	# North wall is built by _build_living_room (shared boundary at y = 250)
 
-	var col := CollisionShape2D.new()
-	var box := RectangleShape2D.new()
-	box.size  = size
-	col.shape = box
-	body.add_child(col)
-	add_child(body)
+# ── Living Room ────────────────────────────────────────────────────────────────
+#
+#  x: -300 → 300   y: -250 → 250   (600 × 500)
+#  Connections:
+#    south  → Foyer         gap x: -80 → 80
+#    east   → Dining Room   stub (step 2)
+#    west   → Kitchen       stub (step 2)
+#    north  → exterior wall (backyard step later)
 
-# ── Chests ─────────────────────────────────────────────────────────────────────
+func _build_living_room() -> void:
+	_floor_rect(Rect2(-300, -250, 600, 500), COLOR_LIVING)
 
-func _place_chests() -> void:
-	for pos in [
-		Vector2(-240,  200),  # hub SW corner
-		Vector2( 240, -200),  # hub NE corner
-		Vector2(  80, -630),  # study
-		Vector2( 680,  100),  # kitchen
-		Vector2(-680, -100),  # bedroom
-		Vector2( 100,  630),  # garage
-	]:
-		_make_chest(pos)
+	# North wall — full (exterior for now)
+	_wall_h(-300, 300, -250)
 
-func _make_chest(pos: Vector2) -> void:
-	var body := StaticBody2D.new()
-	body.name = "Chest"
-	body.position = pos
-	body.add_to_group("chest")
+	# East wall — full (Dining Room stub)
+	_wall_v(-250, 250, 300)
 
-	var vis := Polygon2D.new()
-	vis.color   = COLOR_CHEST
-	vis.polygon = PackedVector2Array([
-		Vector2(-16, -11), Vector2(16, -11),
-		Vector2( 16,  11), Vector2(-16,  11),
-	])
-	body.add_child(vis)
+	# West wall — full (Kitchen / Mudroom stub)
+	_wall_v(-250, 250, -300)
 
-	var col := CollisionShape2D.new()
-	var box := RectangleShape2D.new()
-	box.size  = Vector2(32, 22)
-	col.shape = box
-	body.add_child(col)
-	add_child(body)
+	# South wall — gap at x: -80 → 80 for Foyer door
+	# (this also covers the foyer north-wall flanks at x: ±80 → ±120)
+	_wall_h(-300, -80, 250)
+	_wall_h(  80, 300, 250)
 
 # ── Enemies ────────────────────────────────────────────────────────────────────
 
 func _spawn_enemies() -> void:
 	for pos in [
-		Vector2( 240,  180),  # hub — far corner
-		Vector2(-100, -500),  # study
-		Vector2( 640,    0),  # kitchen
-		Vector2(-640,    0),  # bedroom
-		Vector2(   0,  530),  # garage
-		Vector2(  90,  610),  # garage — second lurker
+		Vector2( 200,  130),   # living room — east corner
+		Vector2(-180,  -90),   # living room — west area
 	]:
 		var enemy := _enemy_scene.instantiate()
 		add_child(enemy)
 		enemy.global_position = pos
 
-# ── Ambient audio ──────────────────────────────────────────────────────────────
+# ── Ambient Audio ──────────────────────────────────────────────────────────────
 
 func _start_ambient() -> void:
 	var stream := _try_load_audio("res://assets/audio/ambient_house.ogg")
@@ -183,9 +138,9 @@ func _start_ambient() -> void:
 
 # ── Primitives ─────────────────────────────────────────────────────────────────
 
-func _floor_rect(rect: Rect2) -> void:
+func _floor_rect(rect: Rect2, color: Color) -> void:
 	var poly := Polygon2D.new()
-	poly.color   = COLOR_FLOOR
+	poly.color   = color
 	poly.z_index = -1
 	poly.polygon = PackedVector2Array([
 		rect.position,
