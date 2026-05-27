@@ -8,6 +8,7 @@ extends Node2D
 #
 #  STEP 1:  front yard · gate · path · porch · foyer · living room
 #  STEP 2:  kitchen · mudroom · pantry · garage  (west wing)
+#  STEP 3:  dining room (east wing) · study · bedroom · bathroom · closet (south)
 #  Remaining rooms will be added in subsequent steps.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,11 @@ const COLOR_KITCHEN := Color(0.13, 0.10, 0.07)   # warm amber-green
 const COLOR_MUDROOM := Color(0.11, 0.10, 0.08)   # neutral dark
 const COLOR_PANTRY  := Color(0.09, 0.08, 0.06)   # very dark storage
 const COLOR_GARAGE  := Color(0.09, 0.09, 0.11)   # cold concrete grey
+const COLOR_DINING  := Color(0.14, 0.11, 0.08)   # warm dark — near living room
+const COLOR_STUDY   := Color(0.10, 0.09, 0.08)   # dim, intimate
+const COLOR_BEDROOM := Color(0.12, 0.09, 0.10)   # slightly mauve-dark
+const COLOR_BATHROOM := Color(0.10, 0.11, 0.12)  # cool blue-dark
+const COLOR_CLOSET  := Color(0.08, 0.07, 0.07)   # very dark
 
 var _enemy_scene := preload("res://scenes/enemy.tscn")
 
@@ -34,6 +40,11 @@ func _ready() -> void:
 	_build_mudroom()
 	_build_pantry()
 	_build_garage()
+	_build_dining_room()
+	_build_study()
+	_build_bedroom()
+	_build_bathroom()
+	_build_closet()
 	_spawn_enemies()
 	_start_ambient()
 
@@ -81,13 +92,19 @@ func _build_front_yard() -> void:
 #  Connections:
 #    north  → Living Room  gap x: -80 → 80  (wall owned by _build_living_room)
 #    south  → front door   gap x: -60 → 60
+#    east   → Bedroom      gap y: 300 → 400
+#    west   → Study        gap y: 300 → 400
 
 func _build_foyer() -> void:
 	_floor_rect(Rect2(-120, 250, 240, 220), COLOR_FOYER)
 
-	# East / west walls — full foyer height
-	_wall_v(250, 470,  120)
-	_wall_v(250, 470, -120)
+	# East wall — gap for Bedroom door (y:300→400)
+	_wall_v(250, 300,  120)
+	_wall_v(400, 470,  120)
+
+	# West wall — gap for Study door (y:300→400)
+	_wall_v(250, 300, -120)
+	_wall_v(400, 470, -120)
 
 	# South wall — front-door gap at x: -60 → 60
 	_wall_h(-120, -60, 470)
@@ -100,7 +117,7 @@ func _build_foyer() -> void:
 #  x: -300 → 300   y: -250 → 250   (600 × 500)
 #  Connections:
 #    south  → Foyer         gap x: -80 → 80
-#    east   → Dining Room   stub (step 3)
+#    east   → Dining Room   gap y: -150 → -50
 #    west   → Kitchen       gap y: -200 → -100
 #    west   → Mudroom       gap y:   50 → 150
 #    north  → exterior wall (backyard step later)
@@ -111,8 +128,9 @@ func _build_living_room() -> void:
 	# North wall — full (exterior for now)
 	_wall_h(-300, 300, -250)
 
-	# East wall — full (Dining Room stub)
-	_wall_v(-250, 250, 300)
+	# East wall — gap for Dining Room door (y:-150→-50)
+	_wall_v(-250, -150, 300)
+	_wall_v( -50,  250, 300)
 
 	# West wall — gaps for Kitchen door (y:-200→-100) and Mudroom door (y:50→150)
 	_wall_v(-250, -200, -300)
@@ -208,12 +226,124 @@ func _build_garage() -> void:
 	# East wall below Mudroom — Mudroom owns y:50→200, Garage owns y:200→470
 	_wall_v(200, 470, -630)
 
+# ── Dining Room ────────────────────────────────────────────────────────────────
+#
+#  x: 300 → 760   y: -380 → 50   (460 × 430)
+#  Connections:
+#    west → Living Room  gap y: -150 → -50  (wall owned by LR)
+
+func _build_dining_room() -> void:
+	_floor_rect(Rect2(300, -380, 460, 430), COLOR_DINING)
+
+	# North wall — exterior
+	_wall_h(300, 760, -380)
+
+	# East wall — exterior
+	_wall_v(-380, 50, 760)
+
+	# South wall — exterior
+	_wall_h(300, 760, 50)
+
+	# West wall owned by Living Room
+
+# ── Study ──────────────────────────────────────────────────────────────────────
+#
+#  x: -420 → -120   y: 250 → 560   (300 × 310)
+#  Connections:
+#    east → Foyer  gap y: 300 → 400  (wall owned by Foyer)
+
+func _build_study() -> void:
+	_floor_rect(Rect2(-420, 250, 300, 310), COLOR_STUDY)
+
+	# North wall — exterior west of LR (LR south wall covers x:-300→-120)
+	_wall_h(-420, -300, 250)
+
+	# West wall — exterior
+	_wall_v(250, 560, -420)
+
+	# South wall — exterior
+	_wall_h(-420, -120, 560)
+
+	# East wall below Foyer (Foyer owns y:250→470 with door gap; Study owns below)
+	_wall_v(470, 560, -120)
+
+# ── Bedroom ────────────────────────────────────────────────────────────────────
+#
+#  x: 120 → 500   y: 250 → 570   (380 × 320)
+#  Connections:
+#    west → Foyer     gap y: 300 → 400  (wall owned by Foyer)
+#    east → Bathroom  gap y: 280 → 360
+#    east → Closet    gap y: 460 → 530
+
+func _build_bedroom() -> void:
+	_floor_rect(Rect2(120, 250, 380, 320), COLOR_BEDROOM)
+
+	# North wall — exterior east of LR (LR south wall covers x:80→300)
+	_wall_h(300, 500, 250)
+
+	# South wall — exterior
+	_wall_h(120, 500, 570)
+
+	# West wall below Foyer (Foyer owns y:250→470 with door gap; Bedroom owns below)
+	_wall_v(470, 570, 120)
+
+	# East wall — gaps for Bathroom (y:280→360) and Closet (y:460→530)
+	_wall_v(250, 280, 500)
+	_wall_v(360, 460, 500)
+	_wall_v(530, 570, 500)
+
+# ── Bathroom ───────────────────────────────────────────────────────────────────
+#
+#  x: 500 → 710   y: 250 → 430   (210 × 180)
+#  Connections:
+#    west → Bedroom  gap y: 280 → 360  (wall owned by Bedroom)
+#    south → Closet  gap x: 540 → 610
+
+func _build_bathroom() -> void:
+	_floor_rect(Rect2(500, 250, 210, 180), COLOR_BATHROOM)
+
+	# North wall — exterior
+	_wall_h(500, 710, 250)
+
+	# East wall — exterior
+	_wall_v(250, 430, 710)
+
+	# South wall — gap for Closet door at x: 540 → 610
+	_wall_h(500, 540, 430)
+	_wall_h(610, 710, 430)
+
+	# West wall owned by Bedroom
+
+# ── Closet ─────────────────────────────────────────────────────────────────────
+#
+#  x: 500 → 630   y: 430 → 570   (130 × 140)
+#  Connections:
+#    north → Bathroom  gap x: 540 → 610  (wall owned by Bathroom)
+#    west  → Bedroom   gap y: 460 → 530  (wall owned by Bedroom)
+
+func _build_closet() -> void:
+	_floor_rect(Rect2(500, 430, 130, 140), COLOR_CLOSET)
+
+	# East wall — exterior
+	_wall_v(430, 570, 630)
+
+	# South wall — exterior
+	_wall_h(500, 630, 570)
+
+	# North wall owned by Bathroom; west wall owned by Bedroom
+
 # ── Enemies ────────────────────────────────────────────────────────────────────
 
 func _spawn_enemies() -> void:
 	for pos in [
 		Vector2( 200,  130),   # living room — east corner
 		Vector2(-180,  -90),   # living room — west area
+		Vector2(-480, -200),   # kitchen
+		Vector2(-540,  100),   # mudroom
+		Vector2(-950,  250),   # garage
+		Vector2(-720,  -25),   # pantry
+		Vector2(  40,  360),   # foyer
+		Vector2( 300,  820),   # front yard
 	]:
 		var enemy := _enemy_scene.instantiate()
 		add_child(enemy)
