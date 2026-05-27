@@ -29,7 +29,7 @@ func _setup_audio() -> void:
 	_sfx_shot = AudioStreamPlayer.new()
 	_sfx_shot.volume_db = 4.0
 	add_child(_sfx_shot)
-	var shot_stream := _try_load_audio("res://assets/audio/sfx_gunshot.ogg")
+	var shot_stream := _try_load_audio("res://assets/audio/sfx_gunshot.mp3")
 	if shot_stream:
 		_sfx_shot.stream = shot_stream
 

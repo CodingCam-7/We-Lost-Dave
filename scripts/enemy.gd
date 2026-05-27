@@ -35,7 +35,7 @@ func _setup_audio() -> void:
 	_sfx_alert = AudioStreamPlayer.new()
 	_sfx_alert.volume_db = 2.0
 	add_child(_sfx_alert)
-	var alert_stream := _try_load_audio("res://assets/audio/sfx_enemy_alert.ogg")
+	var alert_stream := _try_load_audio("res://assets/audio/sfx_enemy_alert.wav")
 	if alert_stream:
 		_sfx_alert.stream = alert_stream
 
