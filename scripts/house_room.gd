@@ -6,7 +6,8 @@ extends Node2D
 #  Origin (0, 0) = centre of Living Room.
 #  Y increases southward.  X increases eastward.
 #
-#  STEP 1 (this file):  front yard · gate · path · porch · foyer · living room
+#  STEP 1:  front yard · gate · path · porch · foyer · living room
+#  STEP 2:  kitchen · mudroom · pantry · garage  (west wing)
 #  Remaining rooms will be added in subsequent steps.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,10 @@ const COLOR_OUTDOOR := Color(0.10, 0.15, 0.08)   # dark grass
 const COLOR_PATH    := Color(0.21, 0.19, 0.16)   # dark stone path / porch slab
 const COLOR_FOYER   := Color(0.18, 0.14, 0.09)   # warm amber-dark
 const COLOR_LIVING  := Color(0.15, 0.11, 0.07)   # warm brown-dark
+const COLOR_KITCHEN := Color(0.13, 0.10, 0.07)   # warm amber-green
+const COLOR_MUDROOM := Color(0.11, 0.10, 0.08)   # neutral dark
+const COLOR_PANTRY  := Color(0.09, 0.08, 0.06)   # very dark storage
+const COLOR_GARAGE  := Color(0.09, 0.09, 0.11)   # cold concrete grey
 
 var _enemy_scene := preload("res://scenes/enemy.tscn")
 
@@ -25,6 +30,10 @@ func _ready() -> void:
 	_build_front_yard()
 	_build_foyer()
 	_build_living_room()
+	_build_kitchen()
+	_build_mudroom()
+	_build_pantry()
+	_build_garage()
 	_spawn_enemies()
 	_start_ambient()
 
@@ -91,8 +100,9 @@ func _build_foyer() -> void:
 #  x: -300 → 300   y: -250 → 250   (600 × 500)
 #  Connections:
 #    south  → Foyer         gap x: -80 → 80
-#    east   → Dining Room   stub (step 2)
-#    west   → Kitchen       stub (step 2)
+#    east   → Dining Room   stub (step 3)
+#    west   → Kitchen       gap y: -200 → -100
+#    west   → Mudroom       gap y:   50 → 150
 #    north  → exterior wall (backyard step later)
 
 func _build_living_room() -> void:
@@ -104,13 +114,99 @@ func _build_living_room() -> void:
 	# East wall — full (Dining Room stub)
 	_wall_v(-250, 250, 300)
 
-	# West wall — full (Kitchen / Mudroom stub)
-	_wall_v(-250, 250, -300)
+	# West wall — gaps for Kitchen door (y:-200→-100) and Mudroom door (y:50→150)
+	_wall_v(-250, -200, -300)
+	_wall_v(-100,   50, -300)
+	_wall_v( 150,  250, -300)
 
 	# South wall — gap at x: -80 → 80 for Foyer door
 	# (this also covers the foyer north-wall flanks at x: ±80 → ±120)
 	_wall_h(-300, -80, 250)
 	_wall_h(  80, 300, 250)
+
+# ── Kitchen ────────────────────────────────────────────────────────────────────
+#
+#  x: -660 → -300   y: -380 → -50   (360 × 330)
+#  Connections:
+#    east  → Living Room  gap y: -200 → -100  (wall owned by LR)
+#    south → Mudroom      gap x: -520 → -440
+
+func _build_kitchen() -> void:
+	_floor_rect(Rect2(-660, -380, 360, 330), COLOR_KITCHEN)
+
+	# North wall — exterior
+	_wall_h(-660, -300, -380)
+
+	# West wall — exterior
+	_wall_v(-380, -50, -660)
+
+	# South wall (boundary with Mudroom) — door gap at x: -520 → -440
+	_wall_h(-660, -520, -50)
+	_wall_h(-440, -300, -50)
+
+# ── Mudroom / Laundry ──────────────────────────────────────────────────────────
+#
+#  x: -630 → -300   y: -50 → 200   (330 × 250)
+#  Connections:
+#    north → Kitchen       gap x: -520 → -440  (owned by Kitchen)
+#    east  → Living Room   gap y: 50 → 150     (owned by LR)
+#    west  → Pantry        gap y: -30 → 30
+#    west  → Garage        gap y: 80 → 160
+
+func _build_mudroom() -> void:
+	_floor_rect(Rect2(-630, -50, 330, 250), COLOR_MUDROOM)
+
+	# South wall — exterior
+	_wall_h(-630, -300, 200)
+
+	# West wall — gaps for Pantry (y:-30→30) and Garage (y:80→160)
+	_wall_v(-50, -30, -630)
+	_wall_v(  30,  80, -630)
+	_wall_v( 160, 200, -630)
+
+# ── Pantry ─────────────────────────────────────────────────────────────────────
+#
+#  x: -820 → -630   y: -100 → 50   (190 × 150)
+#  Connections:
+#    east → Mudroom  gap y: -30 → 30  (wall owned by Mudroom)
+
+func _build_pantry() -> void:
+	_floor_rect(Rect2(-820, -100, 190, 150), COLOR_PANTRY)
+
+	# North wall — exterior
+	_wall_h(-820, -630, -100)
+
+	# West wall — exterior
+	_wall_v(-100, 50, -820)
+
+	# South wall — exterior
+	_wall_h(-820, -630, 50)
+
+	# East wall — upper stub above Mudroom (y:-100→-50); Mudroom owns the rest
+	_wall_v(-100, -50, -630)
+
+# ── Garage ─────────────────────────────────────────────────────────────────────
+#
+#  x: -1260 → -630   y: 50 → 470   (630 × 420)
+#  Connections:
+#    east  → Mudroom    gap y: 80 → 160  (wall owned by Mudroom)
+#    south → exterior   garage door gap x: -1060 → -840
+
+func _build_garage() -> void:
+	_floor_rect(Rect2(-1260, 50, 630, 420), COLOR_GARAGE)
+
+	# North wall — exterior (Pantry south wall at y=50 covers x:-820→-630)
+	_wall_h(-1260, -820, 50)
+
+	# West wall — exterior
+	_wall_v(50, 470, -1260)
+
+	# South wall — garage door gap at x: -1060 → -840
+	_wall_h(-1260, -1060, 470)
+	_wall_h( -840,  -630, 470)
+
+	# East wall below Mudroom — Mudroom owns y:50→200, Garage owns y:200→470
+	_wall_v(200, 470, -630)
 
 # ── Enemies ────────────────────────────────────────────────────────────────────
 
