@@ -8,10 +8,13 @@ const ACCELERATION         := 1200.0
 const EXPOSURE_THRESHOLD   := 1.0
 const CONTACT_RANGE        := 28.0
 
-const DORMANT_COLOR := Color(0.35, 0.1,  0.12)
-const AWARE_COLOR   := Color(1.0,  0.15, 0.08)
-const HIT_COLOR     := Color(1.0,  1.0,  1.0)
-const DEAD_COLOR    := Color(0.4,  0.4,  0.4, 0.5)
+const DORMANT_COLOR   := Color(0.35, 0.1,  0.12)
+const AWARE_COLOR     := Color(1.0,  0.15, 0.08)
+const HIT_COLOR       := Color(1.0,  1.0,  1.0)
+const DEAD_COLOR      := Color(0.4,  0.4,  0.4, 0.5)
+const KEY_DROP_CHANCE := 0.02   # 2% — bosses/elites will have much higher rates later
+
+var _item_drop_scene := preload("res://scenes/item_drop.tscn")
 
 var _hp:             float = MAX_HP
 var _state:          State = State.DORMANT
@@ -101,6 +104,16 @@ func _die() -> void:
 		_sfx_death.play()  # queue_free fires when sound finishes
 	else:
 		queue_free()
+	_try_drop_key()
+
+func _try_drop_key() -> void:
+	if randf() >= KEY_DROP_CHANCE:
+		return
+	var key    := _item_drop_scene.instantiate()
+	key.is_key  = true
+	get_parent().add_child(key)
+	key.global_position = global_position
+	key.launch(Vector2(randf_range(-80.0, 80.0), randf_range(-80.0, 80.0)))
 
 func _flash_hit() -> void:
 	_visual.color = HIT_COLOR

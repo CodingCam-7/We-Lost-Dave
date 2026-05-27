@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://3ku6nt7pek5i"]
+
+[ext_resource type="Script" path="res://scripts/item_drop.gd" id="1_itemdrop"]
+
+[node name="ItemDrop" type="RigidBody2D"]
+script = ExtResource("1_itemdrop")

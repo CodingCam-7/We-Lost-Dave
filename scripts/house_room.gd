@@ -428,17 +428,21 @@ func _spawn_enemies() -> void:
 # ── Furniture ──────────────────────────────────────────────────────────────────
 
 func _spawn_furniture() -> void:
-	for pos in [
-		Vector2(-580, -340),   # kitchen   — north-west corner
-		Vector2( 690, -300),   # dining    — north-east corner
-		Vector2(-370,  510),   # study     — south-west corner
-		Vector2( 310,  520),   # bedroom   — south corner
-		Vector2(-1150, 400),   # garage    — far corner
-		Vector2(-1010, -640),  # tool shed — inside
-	]:
-		var chest := _chest_scene.instantiate()
+	# [position, facing (0=UP 1=DOWN 2=LEFT 3=RIGHT), locked]
+	var chest_data := [
+		[Vector2(-580, -340), 1, false],  # kitchen   — faces south
+		[Vector2( 690, -300), 2, false],  # dining    — faces west
+		[Vector2(-370,  510), 0, false],  # study     — faces north
+		[Vector2( 310,  520), 0, false],  # bedroom   — faces north
+		[Vector2(-1150, 400), 3, true ],  # garage    — locked, faces east
+		[Vector2(-1010,-640), 1, true ],  # tool shed — locked, faces south
+	]
+	for data in chest_data:
+		var chest      := _chest_scene.instantiate()
 		add_child(chest)
-		chest.global_position = pos
+		chest.global_position = data[0]
+		chest.facing          = data[1]
+		chest.locked          = data[2]
 
 	for pos in [
 		Vector2(-850,  180),   # garage — north wall
