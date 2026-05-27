@@ -84,7 +84,7 @@ func _check_contact(delta: float) -> void:
 		return
 	if global_position.distance_to(_player.global_position) < CONTACT_RANGE:
 		_contact_timer = 0.8
-		# TODO: _player.take_damage(34) — add when player health system exists
+		_player.take_damage(1)
 
 func take_damage(amount: float) -> void:
 	_hp -= amount

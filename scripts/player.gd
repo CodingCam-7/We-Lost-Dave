@@ -5,10 +5,27 @@ const SPEED        := 200.0
 const ACCELERATION := 800.0
 const FRICTION     := 600.0
 
+# Health segments
+const SEGMENT_W      := 22.0
+const SEGMENT_H      := 10.0
+const SEGMENT_GAP    := 5.0
+const INVINCIBLE_T   := 0.8
+const COLOR_HP_FULL  := Color(0.85, 0.60, 0.10)
+const COLOR_HP_EMPTY := Color(0.18, 0.12, 0.04)
+const COLOR_HIT      := Color(0.90, 0.15, 0.10)
+const BASE_COLOR     := Color(0.109804, 1.0, 0.6, 1.0)
+
 # .44 Magnum — slow, deliberate, devastating
 const CYLINDER_CAPACITY := 6
 const FIRE_RATE         := 0.5
 const RELOAD_TIME       := 2.75
+
+var _max_segments: int         = 3
+var _current_hp:   int         = 3
+var _hp_rects:     Array       = []
+var _hud_canvas:   CanvasLayer = null
+var _visual:       Polygon2D   = null
+var _invincible:   float       = 0.0
 
 var _ammo:         int   = CYLINDER_CAPACITY
 var _fire_timer:   float = 0.0
@@ -22,6 +39,7 @@ var _sfx_reload:   AudioStreamPlayer
 
 func _ready() -> void:
 	add_to_group("player")
+	_visual = $Polygon2D
 	_setup_audio()
 	_setup_hud()
 
@@ -41,6 +59,8 @@ func _setup_audio() -> void:
 		_sfx_reload.stream = reload_stream
 
 func _physics_process(delta: float) -> void:
+	if _invincible > 0.0:
+		_invincible -= delta
 	_handle_movement(delta)
 	_handle_weapon(delta)
 
@@ -98,18 +118,42 @@ func _spawn_bullet() -> void:
 # ── HUD ───────────────────────────────────────────────────────────────────────
 
 func _setup_hud() -> void:
-	var canvas := CanvasLayer.new()
-	canvas.layer = 10
-	add_child(canvas)
+	_hud_canvas = CanvasLayer.new()
+	_hud_canvas.layer = 10
+	add_child(_hud_canvas)
 
+	# Health bar — top left
+	var hull_label := Label.new()
+	hull_label.text     = "HULL"
+	hull_label.position = Vector2(20, 16)
+	hull_label.add_theme_color_override("font_color", Color(0.6, 0.55, 0.4))
+	hull_label.add_theme_font_size_override("font_size", 13)
+	_hud_canvas.add_child(hull_label)
+	_build_hp_segments()
+
+	# Ammo label — bottom left
 	_ammo_label = Label.new()
 	_ammo_label.position = Vector2(30, 670)
 	_ammo_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
 	_ammo_label.add_theme_font_size_override("font_size", 18)
-	canvas.add_child(_ammo_label)
+	_hud_canvas.add_child(_ammo_label)
 	_update_hud()
 
+func _build_hp_segments() -> void:
+	for rect in _hp_rects:
+		rect.queue_free()
+	_hp_rects.clear()
+	for i in range(_max_segments):
+		var seg      := ColorRect.new()
+		seg.size      = Vector2(SEGMENT_W, SEGMENT_H)
+		seg.position  = Vector2(60.0 + i * (SEGMENT_W + SEGMENT_GAP), 18.0)
+		seg.color     = COLOR_HP_FULL if i < _current_hp else COLOR_HP_EMPTY
+		_hud_canvas.add_child(seg)
+		_hp_rects.append(seg)
+
 func _update_hud() -> void:
+	for i in range(_hp_rects.size()):
+		_hp_rects[i].color = COLOR_HP_FULL if i < _current_hp else COLOR_HP_EMPTY
 	if _reloading:
 		var progress := 1.0 - (_reload_timer / RELOAD_TIME)
 		var filled   := int(progress * 10)
@@ -120,6 +164,34 @@ func _update_hud() -> void:
 		for i in range(CYLINDER_CAPACITY):
 			pips += "● " if i < _ammo else "○ "
 		_ammo_label.text = ".44 MAG   " + pips.strip_edges()
+
+# ── Health ────────────────────────────────────────────────────────────────────
+
+func take_damage(amount: int) -> void:
+	if _invincible > 0.0:
+		return
+	_current_hp = max(0, _current_hp - amount)
+	_invincible = INVINCIBLE_T
+	_update_hud()
+	_flash_hit()
+	if _current_hp == 0:
+		_die()
+
+func add_segment() -> void:
+	_max_segments += 1
+	_current_hp    = min(_current_hp + 1, _max_segments)
+	_build_hp_segments()
+
+func _die() -> void:
+	pass  # TODO: death screen / respawn
+
+func _flash_hit() -> void:
+	if not is_instance_valid(_visual):
+		return
+	_visual.color = COLOR_HIT
+	await get_tree().create_timer(0.12).timeout
+	if is_instance_valid(self):
+		_visual.color = BASE_COLOR
 
 func _try_load_audio(path: String) -> AudioStream:
 	if ResourceLoader.exists(path):

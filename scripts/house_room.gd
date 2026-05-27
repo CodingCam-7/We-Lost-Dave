@@ -9,6 +9,7 @@ extends Node2D
 #  STEP 1:  front yard · gate · path · porch · foyer · living room
 #  STEP 2:  kitchen · mudroom · pantry · garage  (west wing)
 #  STEP 3:  dining room (east wing) · study · bedroom · bathroom · closet (south)
+#  STEP 4:  backyard · pool · tool shed
 #  Remaining rooms will be added in subsequent steps.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -27,9 +28,14 @@ const COLOR_DINING  := Color(0.14, 0.11, 0.08)   # warm dark — near living roo
 const COLOR_STUDY   := Color(0.10, 0.09, 0.08)   # dim, intimate
 const COLOR_BEDROOM := Color(0.12, 0.09, 0.10)   # slightly mauve-dark
 const COLOR_BATHROOM := Color(0.10, 0.11, 0.12)  # cool blue-dark
-const COLOR_CLOSET  := Color(0.08, 0.07, 0.07)   # very dark
+const COLOR_CLOSET   := Color(0.08, 0.07, 0.07)   # very dark
+const COLOR_BACKYARD := Color(0.08, 0.12, 0.06)   # dark outdoor grass
+const COLOR_POOL     := Color(0.05, 0.10, 0.18)   # dark water
+const COLOR_SHED     := Color(0.10, 0.09, 0.08)   # dark wood
 
-var _enemy_scene := preload("res://scenes/enemy.tscn")
+var _enemy_scene     := preload("res://scenes/enemy.tscn")
+var _chest_scene     := preload("res://scenes/chest.tscn")
+var _workbench_scene := preload("res://scenes/workbench.tscn")
 
 func _ready() -> void:
 	_build_darkness()
@@ -40,12 +46,16 @@ func _ready() -> void:
 	_build_mudroom()
 	_build_pantry()
 	_build_garage()
+	_build_backyard()
+	_build_pool()
+	_build_tool_shed()
 	_build_dining_room()
 	_build_study()
 	_build_bedroom()
 	_build_bathroom()
 	_build_closet()
 	_spawn_enemies()
+	_spawn_furniture()
 	_start_ambient()
 
 # ── Darkness ───────────────────────────────────────────────────────────────────
@@ -120,13 +130,14 @@ func _build_foyer() -> void:
 #    east   → Dining Room   gap y: -150 → -50
 #    west   → Kitchen       gap y: -200 → -100
 #    west   → Mudroom       gap y:   50 → 150
-#    north  → exterior wall (backyard step later)
+#    north  → Backyard      gap x: -60 → 60
 
 func _build_living_room() -> void:
 	_floor_rect(Rect2(-300, -250, 600, 500), COLOR_LIVING)
 
-	# North wall — full (exterior for now)
-	_wall_h(-300, 300, -250)
+	# North wall — gap for back door at x: -60 → 60
+	_wall_h(-300, -60, -250)
+	_wall_h(  60, 300, -250)
 
 	# East wall — gap for Dining Room door (y:-150→-50)
 	_wall_v(-250, -150, 300)
@@ -225,6 +236,71 @@ func _build_garage() -> void:
 
 	# East wall below Mudroom — Mudroom owns y:50→200, Garage owns y:200→470
 	_wall_v(200, 470, -630)
+
+# ── Backyard ───────────────────────────────────────────────────────────────────
+#
+#  x: -800 → 800   y: -750 → -250   (1600 × 500)
+#  Connections:
+#    south → Living Room  gap x: -60 → 60  (owned by LR)
+#    west  → Tool Shed    corridor at x: -920→-800, y: -720→-650
+
+func _build_backyard() -> void:
+	_floor_rect(Rect2(-800, -750, 1600, 500), COLOR_BACKYARD)
+
+	# North wall — exterior
+	_wall_h(-800, 800, -750)
+
+	# East wall — exterior
+	_wall_v(-750, -250, 800)
+
+	# South wall — exterior beyond house width (LR north wall covers x:-300→300)
+	_wall_h(-800, -300, -250)
+	_wall_h( 300,  800, -250)
+
+	# West wall — gap for tool shed corridor (y:-720→-650)
+	_wall_v(-750, -720, -800)
+	_wall_v(-650, -250, -800)
+
+	# Corridor floor and walls bridging the 120px gap to the tool shed
+	_floor_rect(Rect2(-920, -720, 120, 70), COLOR_BACKYARD)
+	_wall_h(-920, -800, -720)   # corridor north
+	_wall_h(-920, -800, -650)   # corridor south
+
+# ── Pool ───────────────────────────────────────────────────────────────────────
+#
+#  x: -250 → 250   y: -720 → -380   (500 × 340)
+#  Impassable obstacle inset within the backyard
+
+func _build_pool() -> void:
+	_floor_rect(Rect2(-250, -720, 500, 340), COLOR_POOL)
+
+	# Full perimeter — no entry, players walk around it
+	_wall_h(-250, 250, -720)   # north
+	_wall_h(-250, 250, -380)   # south
+	_wall_v(-720, -380, -250)  # west
+	_wall_v(-720, -380,  250)  # east
+
+# ── Tool Shed ──────────────────────────────────────────────────────────────────
+#
+#  x: -1100 → -920   y: -750 → -590   (180 × 160)
+#  Connections:
+#    east → backyard corridor  gap y: -720 → -650
+
+func _build_tool_shed() -> void:
+	_floor_rect(Rect2(-1100, -750, 180, 160), COLOR_SHED)
+
+	# North wall — exterior (collinear with backyard north at y=-750)
+	_wall_h(-1100, -920, -750)
+
+	# West wall — exterior
+	_wall_v(-750, -590, -1100)
+
+	# South wall — exterior
+	_wall_h(-1100, -920, -590)
+
+	# East wall — gap for corridor (y:-720→-650)
+	_wall_v(-750, -720, -920)
+	_wall_v(-650, -590, -920)
 
 # ── Dining Room ────────────────────────────────────────────────────────────────
 #
@@ -348,6 +424,30 @@ func _spawn_enemies() -> void:
 		var enemy := _enemy_scene.instantiate()
 		add_child(enemy)
 		enemy.global_position = pos
+
+# ── Furniture ──────────────────────────────────────────────────────────────────
+
+func _spawn_furniture() -> void:
+	for pos in [
+		Vector2(-580, -340),   # kitchen   — north-west corner
+		Vector2( 690, -300),   # dining    — north-east corner
+		Vector2(-370,  510),   # study     — south-west corner
+		Vector2( 310,  520),   # bedroom   — south corner
+		Vector2(-1150, 400),   # garage    — far corner
+		Vector2(-1010, -640),  # tool shed — inside
+	]:
+		var chest := _chest_scene.instantiate()
+		add_child(chest)
+		chest.global_position = pos
+
+	for pos in [
+		Vector2(-850,  180),   # garage — north wall
+		Vector2(-230,  490),   # study  — south wall desk
+		Vector2(-390, -300),   # kitchen — counter
+	]:
+		var bench := _workbench_scene.instantiate()
+		add_child(bench)
+		bench.global_position = pos
 
 # ── Ambient Audio ──────────────────────────────────────────────────────────────
 
