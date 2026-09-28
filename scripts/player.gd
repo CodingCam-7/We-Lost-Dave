@@ -47,12 +47,13 @@ var _ammo_label:   Label = null
 var _key_count:    int   = 0
 var _key_label:    Label = null
 
-# Workbench upgrades — reload/fire rate start at the consts and shrink with upgrades
-var _scrap:         int   = 0
+# Workbench upgrades — reload/fire rate start at the consts and shrink with upgrades.
+# Scrap and upgrade levels are stored in the RunState autoload so they survive death.
+const RELOAD_STEP := 0.4    # seconds removed per reload upgrade
+const FIRE_STEP   := 0.08   # seconds removed per fire-rate upgrade
 var _scrap_label:   Label = null
 var _reload_time:   float = RELOAD_TIME
 var _fire_rate:     float = FIRE_RATE
-var upgrade_levels: Dictionary = {}   # upgrade id -> times purchased
 
 var _interactables: Array = []
 var _prompt_label:  Label = null
@@ -86,6 +87,7 @@ func _ready() -> void:
 	_visual = $Polygon2D
 	_setup_audio()
 	_setup_hud()
+	_reapply_upgrades()
 
 func _setup_audio() -> void:
 	_sfx_shot = AudioStreamPlayer.new()
@@ -453,7 +455,7 @@ func _update_key_label() -> void:
 
 func _update_scrap_label() -> void:
 	if _scrap_label:
-		_scrap_label.text = "SCRAP  ×%d" % _scrap
+		_scrap_label.text = "SCRAP  ×%d" % RunState.scrap
 
 # ── Interaction ───────────────────────────────────────────────────────────────
 
@@ -535,12 +537,12 @@ func upgrade_inventory() -> void:
 # ── Scrap & workbench upgrades ────────────────────────────────────────────────
 
 func get_scrap() -> int:
-	return _scrap
+	return RunState.scrap
 
 func spend_scrap(amount: int) -> bool:
-	if _scrap < amount:
+	if RunState.scrap < amount:
 		return false
-	_scrap -= amount
+	RunState.scrap -= amount
 	_update_scrap_label()
 	return true
 
@@ -550,16 +552,32 @@ func salvage_backpack() -> int:
 	var count := _inventory.size()
 	_inventory.clear()
 	_backpack_selected = -1
-	_scrap += count
+	RunState.scrap += count
 	_refresh_backpack()
 	_update_scrap_label()
 	return count
 
-func reduce_reload_time(seconds: float) -> void:
-	_reload_time = max(0.5, _reload_time - seconds)
+func upgrade_reload() -> void:
+	_reload_time = max(0.5, _reload_time - RELOAD_STEP)
 
-func reduce_fire_rate(seconds: float) -> void:
-	_fire_rate = max(0.1, _fire_rate - seconds)
+func upgrade_fire_rate() -> void:
+	_fire_rate = max(0.1, _fire_rate - FIRE_STEP)
+
+# Runs the effect of one upgrade purchase. Used by the workbench when buying,
+# and by _reapply_upgrades() when Dave respawns.
+func apply_upgrade(id: String) -> void:
+	match id:
+		"hull":   add_segment()
+		"pack":   upgrade_inventory()
+		"reload": upgrade_reload()
+		"fire":   upgrade_fire_rate()
+
+# A fresh Dave starts with base stats — replay every upgrade bought in earlier
+# runs. Must run after _setup_hud(), since hull/pack upgrades rebuild HUD pieces.
+func _reapply_upgrades() -> void:
+	for id in RunState.upgrade_levels:
+		for i in RunState.get_level(id):
+			apply_upgrade(id)
 
 # ── Health ────────────────────────────────────────────────────────────────────
 

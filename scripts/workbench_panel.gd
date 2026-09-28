@@ -93,7 +93,7 @@ func _spacer(height: int) -> Control:
 # ── State ─────────────────────────────────────────────────────────────────────
 
 func _level(id: String) -> int:
-	return player.upgrade_levels.get(id, 0)
+	return RunState.get_level(id)
 
 func _cost(upgrade: Dictionary) -> int:
 	return upgrade["base_cost"] + _level(upgrade["id"])
@@ -130,16 +130,9 @@ func _buy(index: int) -> void:
 	if not player.spend_scrap(_cost(u)):
 		_status_label.text = "Not enough scrap."
 		return
-	_apply(u["id"])
-	player.upgrade_levels[u["id"]] = lvl + 1
+	RunState.upgrade_levels[u["id"]] = lvl + 1
+	player.apply_upgrade(u["id"])
 	_status_label.text = "%s installed." % u["name"]
-
-func _apply(id: String) -> void:
-	match id:
-		"hull":   player.add_segment()
-		"pack":   player.upgrade_inventory()
-		"reload": player.reduce_reload_time(0.4)
-		"fire":   player.reduce_fire_rate(0.08)
 
 func _close() -> void:
 	get_tree().paused = false
