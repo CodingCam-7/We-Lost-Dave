@@ -19,6 +19,9 @@ const BASE_COLOR     := Color(0.109804, 1.0, 0.6, 1.0)
 const CYLINDER_CAPACITY := 6
 const FIRE_RATE         := 0.5
 const RELOAD_TIME       := 2.75
+# The gun lives permanently in hotbar slot 1 — it can't be moved, dropped or salvaged
+const GUN_SLOT := 0
+const GUN_ITEM := {"id": "magnum", "name": ".44 Magnum", "short": ".44 MAG", "color": Color(0.75, 0.72, 0.62)}
 
 # ── Inventory UI ──────────────────────────────────────────────────────────────
 const SLOT_W   := 52
@@ -74,8 +77,9 @@ var _backpack_slots:     Array     = []   # ColorRect nodes
 var _backpack_swatches:  Array     = []   # small ColorRect per slot
 var _backpack_labels:    Array     = []   # Label per slot
 
-# Hotbar — 3 slots
-var _hotbar:             Array = [null, null, null]
+# Hotbar — slot 1 is the gun, slots 2-4 hold items
+const HOTBAR_SIZE := 4
+var _hotbar:             Array = [GUN_ITEM, null, null, null]
 var _hotbar_active:      int   = 0
 var _hotbar_slots:       Array = []   # ColorRect nodes
 var _hotbar_swatches:    Array = []
@@ -119,26 +123,28 @@ func _physics_process(delta: float) -> void:
 	if not _interactables.is_empty():
 		_refresh_prompt()
 
+const SLOT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]   # index = hotbar slot
+
 func _unhandled_input(event: InputEvent) -> void:
+	# Left-click with an item slot selected uses the item. Clicks on HUD
+	# buttons (hotbar/backpack) are consumed by the GUI and never reach here.
+	if event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT and _hotbar_active != GUN_SLOT:
+		_use_active_item()
+		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var key := event as InputEventKey
 	var k   := key.physical_keycode
-	var h   := Input.is_physical_key_pressed(KEY_H)
 	match k:
 		KEY_E:       _try_interact()
 		KEY_I:       _toggle_backpack()
 		KEY_DELETE:  _drop_selected_item()
 		KEY_F:       _use_active_item()
-		KEY_1:
-			if h: _equip_to_hotbar(0)
-			else: _set_hotbar_active(0)
-		KEY_2:
-			if h: _equip_to_hotbar(1)
-			else: _set_hotbar_active(1)
-		KEY_3:
-			if h: _equip_to_hotbar(2)
-			else: _set_hotbar_active(2)
+	var slot := SLOT_KEYS.find(k)
+	if slot >= 0:
+		if Input.is_physical_key_pressed(KEY_H): _equip_to_hotbar(slot)
+		else: _set_hotbar_active(slot)
 
 # ── Movement ──────────────────────────────────────────────────────────────────
 
@@ -164,8 +170,14 @@ func _handle_weapon(delta: float) -> void:
 		_update_ammo_label()
 		return
 	_fire_timer -= delta
-	if Input.is_action_just_pressed("reload") or \
-	   (Input.is_action_just_pressed("shoot") and _ammo == 0):
+	if Input.is_action_just_pressed("reload"):
+		_start_reload()
+		return
+	# Gun only fires when its hotbar slot is selected, and not while the
+	# cursor is over a HUD button (so clicking the hotbar doesn't shoot)
+	if _hotbar_active != GUN_SLOT or get_viewport().gui_get_hovered_control() != null:
+		return
+	if Input.is_action_just_pressed("shoot") and _ammo == 0:
 		_start_reload()
 		return
 	if Input.is_action_pressed("shoot") and _fire_timer <= 0.0 and _ammo > 0:
@@ -264,17 +276,18 @@ func _build_hp_segments() -> void:
 		seg.size     = Vector2(SEGMENT_W, SEGMENT_H)
 		seg.position = Vector2(60.0 + i * (SEGMENT_W + SEGMENT_GAP), 18.0)
 		seg.color    = COLOR_HP_FULL if i < _current_hp else COLOR_HP_EMPTY
+		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE  # don't block shooting when hovered
 		_hud_canvas.add_child(seg)
 		_hp_rects.append(seg)
 
 # ── Hotbar ────────────────────────────────────────────────────────────────────
 
 func _build_hotbar(vp: Vector2) -> void:
-	var total_w := 3 * SLOT_W + 2 * SLOT_GAP
+	var total_w := HOTBAR_SIZE * SLOT_W + (HOTBAR_SIZE - 1) * SLOT_GAP
 	var sx      := (vp.x - total_w) / 2.0
 	var sy      := vp.y - SLOT_H - 12.0
 
-	for i in range(3):
+	for i in range(HOTBAR_SIZE):
 		var slot := _make_slot(Vector2(sx + i * (SLOT_W + SLOT_GAP), sy))
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 		slot.gui_input.connect(func(e, idx = i): _on_hotbar_clicked(idx, e))
@@ -297,7 +310,7 @@ func _build_hotbar(vp: Vector2) -> void:
 		slot.add_child(num)
 
 func _refresh_hotbar() -> void:
-	for i in range(3):
+	for i in range(HOTBAR_SIZE):
 		var item: Variant = _hotbar[i]
 		var slot: ColorRect = _hotbar_slots[i]
 		var sw:   ColorRect = _hotbar_swatches[i]
@@ -315,6 +328,7 @@ func _refresh_hotbar() -> void:
 func _set_hotbar_active(slot: int) -> void:
 	_hotbar_active = slot
 	_refresh_hotbar()
+	_update_ammo_label()  # shows/hides the HOLSTERED tag
 
 func _on_hotbar_clicked(idx: int, event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed \
@@ -391,6 +405,8 @@ func _on_backpack_clicked(idx: int, event: InputEvent) -> void:
 	_refresh_backpack()
 
 func _equip_to_hotbar(slot: int) -> void:
+	if slot == GUN_SLOT:
+		return  # the gun's slot is reserved
 	if _backpack_selected < 0 or _backpack_selected >= _inventory.size():
 		return
 	var item: Dictionary = _inventory[_backpack_selected]
@@ -463,6 +479,8 @@ func _update_ammo_label() -> void:
 		for i in range(CYLINDER_CAPACITY):
 			pips += "● " if i < _ammo else "○ "
 		_ammo_label.text = ".44 MAG   " + pips.strip_edges()
+		if _hotbar_active != GUN_SLOT:
+			_ammo_label.text += "   HOLSTERED"
 
 func _update_key_label() -> void:
 	if _key_label:
@@ -636,6 +654,8 @@ func _flash_hit() -> void:
 # ── Item use ──────────────────────────────────────────────────────────────────
 
 func _use_active_item() -> void:
+	if _hotbar_active == GUN_SLOT:
+		return
 	var item: Variant = _hotbar[_hotbar_active]
 	if item == null:
 		return
