@@ -47,6 +47,13 @@ var _ammo_label:   Label = null
 var _key_count:    int   = 0
 var _key_label:    Label = null
 
+# Workbench upgrades — reload/fire rate start at the consts and shrink with upgrades
+var _scrap:         int   = 0
+var _scrap_label:   Label = null
+var _reload_time:   float = RELOAD_TIME
+var _fire_rate:     float = FIRE_RATE
+var upgrade_levels: Dictionary = {}   # upgrade id -> times purchased
+
 var _interactables: Array = []
 var _prompt_label:  Label = null
 
@@ -152,7 +159,7 @@ func _handle_weapon(delta: float) -> void:
 		_start_reload()
 		return
 	if Input.is_action_pressed("shoot") and _fire_timer <= 0.0 and _ammo > 0:
-		_fire_timer  = FIRE_RATE
+		_fire_timer  = _fire_rate
 		_ammo       -= 1
 		_spawn_bullet()
 		_update_ammo_label()
@@ -161,7 +168,7 @@ func _start_reload() -> void:
 	if _reloading or _ammo == CYLINDER_CAPACITY:
 		return
 	_reloading    = true
-	_reload_timer = RELOAD_TIME
+	_reload_timer = _reload_time
 	if _sfx_reload.stream: _sfx_reload.play()
 	_update_ammo_label()
 
@@ -197,6 +204,13 @@ func _setup_hud() -> void:
 	_key_label.add_theme_font_size_override("font_size", 13)
 	_hud_canvas.add_child(_key_label)
 
+	# Scrap count — spent at workbenches
+	_scrap_label = Label.new()
+	_scrap_label.position = Vector2(20, 54)
+	_scrap_label.add_theme_color_override("font_color", Color(0.60, 0.65, 0.70))
+	_scrap_label.add_theme_font_size_override("font_size", 13)
+	_hud_canvas.add_child(_scrap_label)
+
 	# Interaction prompt — above ammo
 	_prompt_label = Label.new()
 	_prompt_label.position = Vector2(20, 612)
@@ -219,6 +233,7 @@ func _setup_hud() -> void:
 
 	_update_ammo_label()
 	_update_key_label()
+	_update_scrap_label()
 	_refresh_hotbar()
 
 # ── HP segments ───────────────────────────────────────────────────────────────
@@ -423,7 +438,7 @@ func _update_ammo_label() -> void:
 	if not _ammo_label:
 		return
 	if _reloading:
-		var progress := 1.0 - (_reload_timer / RELOAD_TIME)
+		var progress := 1.0 - (_reload_timer / _reload_time)
 		var filled   := int(progress * 10)
 		_ammo_label.text = "RELOADING  [" + "▓".repeat(filled) + "░".repeat(10 - filled) + "]"
 	else:
@@ -435,6 +450,10 @@ func _update_ammo_label() -> void:
 func _update_key_label() -> void:
 	if _key_label:
 		_key_label.text = "KEY  ×%d" % _key_count
+
+func _update_scrap_label() -> void:
+	if _scrap_label:
+		_scrap_label.text = "SCRAP  ×%d" % _scrap
 
 # ── Interaction ───────────────────────────────────────────────────────────────
 
@@ -509,7 +528,38 @@ func upgrade_inventory() -> void:
 	if _backpack_panel:
 		_backpack_panel.queue_free()
 	_build_backpack(get_viewport().get_visible_rect().size)
+	# New panel is built hidden — keep it matching the open/closed state
+	_backpack_panel.visible = _backpack_open
 	_refresh_backpack()
+
+# ── Scrap & workbench upgrades ────────────────────────────────────────────────
+
+func get_scrap() -> int:
+	return _scrap
+
+func spend_scrap(amount: int) -> bool:
+	if _scrap < amount:
+		return false
+	_scrap -= amount
+	_update_scrap_label()
+	return true
+
+# Breaks down every backpack item (not hotbar) into 1 scrap each.
+# Returns how many items were salvaged.
+func salvage_backpack() -> int:
+	var count := _inventory.size()
+	_inventory.clear()
+	_backpack_selected = -1
+	_scrap += count
+	_refresh_backpack()
+	_update_scrap_label()
+	return count
+
+func reduce_reload_time(seconds: float) -> void:
+	_reload_time = max(0.5, _reload_time - seconds)
+
+func reduce_fire_rate(seconds: float) -> void:
+	_fire_rate = max(0.1, _fire_rate - seconds)
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
