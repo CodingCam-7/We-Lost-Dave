@@ -529,7 +529,8 @@ func add_segment() -> void:
 	_build_hp_segments()
 
 func _die() -> void:
-	pass  # TODO: death screen / respawn
+	# Added to the current scene (not root) so it's freed when the scene reloads
+	get_tree().current_scene.add_child(DeathScreen.new())
 
 func _flash_hit() -> void:
 	if not is_instance_valid(_visual):
