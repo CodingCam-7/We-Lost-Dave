@@ -1,18 +1,11 @@
 extends RigidBody2D
 
-var is_key:    bool   = false
-var item_name: String = "???"
+var is_key:  bool   = false
+var item_id: String = ""   # LootTable id — left empty, a random item is rolled in _ready()
 
 const KEY_COLOR := Color(0.95, 0.75, 0.10)
-const COLORS    := [
-	Color(0.70, 0.30, 1.00, 0.95),
-	Color(0.30, 0.90, 0.45, 0.95),
-	Color(0.30, 0.55, 1.00, 0.95),
-	Color(1.00, 0.35, 0.30, 0.95),
-	Color(0.90, 0.80, 0.20, 0.95),
-]
 
-var _orb_color: Color = Color(0, 0, 0, 0)  # alpha=0 = not preset; set before add_child() to override
+var _orb_color: Color = Color(0, 0, 0, 0)
 
 func _ready() -> void:
 	collision_layer = 4
@@ -25,8 +18,13 @@ func _ready() -> void:
 	mat.friction = 0.6
 	physics_material_override = mat
 
-	if _orb_color.a == 0.0:
-		_orb_color = KEY_COLOR if is_key else COLORS[randi() % COLORS.size()]
+	# Each item type has its own orb color, so players learn to recognise them
+	if is_key:
+		_orb_color = KEY_COLOR
+	else:
+		if item_id == "":
+			item_id = LootTable.roll()
+		_orb_color = LootTable.get_def(item_id)["color"]
 
 	# Octagonal visual
 	var vis := Polygon2D.new()
@@ -62,14 +60,16 @@ func launch(vel: Vector2) -> void:
 	linear_velocity = vel
 
 func get_prompt() -> String:
-	return "[E]  Pick up KEY" if is_key else "[E]  Pick up item"
+	return "[E]  Pick up KEY" if is_key else "[E]  Pick up " + LootTable.get_def(item_id)["name"]
 
 func interact(player: Node) -> void:
-	player.unregister_interactable(self)
 	if is_key:
 		player.add_key()
-	else:
-		player.add_to_inventory({"name": item_name, "color": _orb_color})
+	elif not player.add_to_inventory(LootTable.make_item(item_id)):
+		# Backpack full — leave the orb on the floor instead of deleting it
+		player.show_message("Backpack full.")
+		return
+	player.unregister_interactable(self)
 	queue_free()
 
 func _on_body_entered(body: Node2D) -> void:

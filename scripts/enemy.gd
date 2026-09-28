@@ -13,6 +13,7 @@ const AWARE_COLOR     := Color(1.0,  0.15, 0.08)
 const HIT_COLOR       := Color(1.0,  1.0,  1.0)
 const DEAD_COLOR      := Color(0.4,  0.4,  0.4, 0.5)
 const KEY_DROP_CHANCE := 0.02   # 2% — bosses/elites will have much higher rates later
+const STUNNED_COLOR   := Color(0.30, 0.55, 1.00)
 
 var _item_drop_scene := preload("res://scenes/item_drop.tscn")
 
@@ -20,6 +21,7 @@ var _hp:             float = MAX_HP
 var _state:          State = State.DORMANT
 var _exposure:       float = 0.0
 var _contact_timer:  float = 0.0
+var _stun_timer:     float = 0.0
 var _player:         CharacterBody2D
 var _detection_cone: Area2D
 var _visual:         Polygon2D
@@ -71,6 +73,13 @@ func _become_aware() -> void:
 		_sfx_alert.play()
 
 func _update_behaviour(delta: float) -> void:
+	# Stunned enemies freeze in place and can't deal contact damage
+	if _stun_timer > 0.0:
+		_stun_timer -= delta
+		velocity = Vector2.ZERO
+		if _stun_timer <= 0.0:
+			_visual.color = _base_color()
+		return
 	match _state:
 		State.DORMANT:
 			velocity = Vector2.ZERO
@@ -88,6 +97,15 @@ func _check_contact(delta: float) -> void:
 	if global_position.distance_to(_player.global_position) < CONTACT_RANGE:
 		_contact_timer = 0.8
 		_player.take_damage(1)
+
+func stun(seconds: float) -> void:
+	if _hp <= 0.0:
+		return
+	_stun_timer   = max(_stun_timer, seconds)
+	_visual.color = STUNNED_COLOR
+
+func _base_color() -> Color:
+	return AWARE_COLOR if _state == State.AWARE else DORMANT_COLOR
 
 func take_damage(amount: float) -> void:
 	_hp -= amount
@@ -119,7 +137,7 @@ func _flash_hit() -> void:
 	_visual.color = HIT_COLOR
 	await get_tree().create_timer(0.1).timeout
 	if is_instance_valid(self):
-		_visual.color = AWARE_COLOR if _state == State.AWARE else DORMANT_COLOR
+		_visual.color = STUNNED_COLOR if _stun_timer > 0.0 else _base_color()
 
 func _try_load_audio(path: String) -> AudioStream:
 	if ResourceLoader.exists(path):

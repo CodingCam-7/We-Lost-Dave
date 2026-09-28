@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	_scrap_label = _make_label("", SCRAP_COLOR, 15)
 	box.add_child(_scrap_label)
 	box.add_child(_spacer(6))
-	box.add_child(_make_label("[S]  Salvage backpack  (+1 scrap per item)", TEXT_COLOR, 14))
+	box.add_child(_make_label("[S]  Salvage backpack  (scrap value varies by item)", TEXT_COLOR, 14))
 	box.add_child(_spacer(6))
 
 	for i in UPGRADES.size():
@@ -118,8 +118,8 @@ func _refresh() -> void:
 # ── Actions ───────────────────────────────────────────────────────────────────
 
 func _salvage() -> void:
-	var n: int = player.salvage_backpack()
-	_status_label.text = "Nothing to salvage." if n == 0 else "Salvaged %d item(s)." % n
+	var gained: int = player.salvage_backpack()
+	_status_label.text = "Nothing to salvage." if gained == 0 else "Salvaged for %d scrap." % gained
 
 func _buy(index: int) -> void:
 	var u: Dictionary = UPGRADES[index]

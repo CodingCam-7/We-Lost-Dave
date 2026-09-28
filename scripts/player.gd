@@ -52,6 +52,12 @@ var _key_label:    Label = null
 const RELOAD_STEP := 0.4    # seconds removed per reload upgrade
 const FIRE_STEP   := 0.08   # seconds removed per fire-rate upgrade
 var _scrap_label:   Label = null
+
+# Item effects
+var _speed_mult:    float = 1.0
+var _speed_timer:   float = 0.0
+var _message_label: Label = null
+var _message_timer: float = 0.0
 var _reload_time:   float = RELOAD_TIME
 var _fire_rate:     float = FIRE_RATE
 
@@ -107,6 +113,7 @@ func _setup_audio() -> void:
 func _physics_process(delta: float) -> void:
 	if _invincible > 0.0:
 		_invincible -= delta
+	_tick_timers(delta)
 	_handle_movement(delta)
 	_handle_weapon(delta)
 	if not _interactables.is_empty():
@@ -122,6 +129,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_E:       _try_interact()
 		KEY_I:       _toggle_backpack()
 		KEY_DELETE:  _drop_selected_item()
+		KEY_F:       _use_active_item()
 		KEY_1:
 			if h: _equip_to_hotbar(0)
 			else: _set_hotbar_active(0)
@@ -140,7 +148,7 @@ func _handle_movement(delta: float) -> void:
 		Input.get_axis("move_up",    "move_down")
 	)
 	if input_dir.length() > 0:
-		velocity = velocity.move_toward(input_dir.normalized() * SPEED, ACCELERATION * delta)
+		velocity = velocity.move_toward(input_dir.normalized() * SPEED * _speed_mult, ACCELERATION * delta)
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, FRICTION * delta)
 	move_and_slide()
@@ -221,6 +229,14 @@ func _setup_hud() -> void:
 	_prompt_label.visible = false
 	_hud_canvas.add_child(_prompt_label)
 
+	# Short-lived feedback / lore text — above the interaction prompt
+	_message_label = Label.new()
+	_message_label.position = Vector2(20, 588)
+	_message_label.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
+	_message_label.add_theme_font_size_override("font_size", 14)
+	_message_label.visible = false
+	_hud_canvas.add_child(_message_label)
+
 	# Ammo — bottom left
 	_ammo_label = Label.new()
 	_ammo_label.position = Vector2(20, 636)
@@ -294,7 +310,7 @@ func _refresh_hotbar() -> void:
 			slot.color  = COL_SLOT_ACTIVE if i == _hotbar_active else COL_SLOT_FILLED
 			sw.color    = item["color"]
 			sw.visible  = true
-			lbl.text    = item["name"]
+			lbl.text    = item["short"]
 
 func _set_hotbar_active(slot: int) -> void:
 	_hotbar_active = slot
@@ -358,7 +374,7 @@ func _refresh_backpack() -> void:
 			slot.color = COL_SLOT_SELECTED if i == _backpack_selected else COL_SLOT_FILLED
 			sw.color   = item["color"]
 			sw.visible = true
-			lbl.text   = item["name"]
+			lbl.text   = item["short"]
 
 func _toggle_backpack() -> void:
 	_backpack_open = not _backpack_open
@@ -396,8 +412,7 @@ func _drop_selected_item() -> void:
 	_backpack_selected = -1
 
 	var drop           := _item_drop_scene.instantiate()
-	drop.item_name      = item["name"]
-	drop._orb_color     = item["color"]
+	drop.item_id        = item["id"]
 	get_parent().add_child(drop)
 	drop.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	drop.launch(Vector2(randf_range(-120, 120), randf_range(-120, 120)))
@@ -546,16 +561,18 @@ func spend_scrap(amount: int) -> bool:
 	_update_scrap_label()
 	return true
 
-# Breaks down every backpack item (not hotbar) into 1 scrap each.
-# Returns how many items were salvaged.
+# Breaks down every backpack item (not hotbar) into scrap — each item is
+# worth its "scrap" value from the loot table. Returns total scrap gained.
 func salvage_backpack() -> int:
-	var count := _inventory.size()
+	var total := 0
+	for item: Dictionary in _inventory:
+		total += LootTable.get_def(item["id"])["scrap"]
 	_inventory.clear()
 	_backpack_selected = -1
-	RunState.scrap += count
+	RunState.scrap += total
 	_refresh_backpack()
 	_update_scrap_label()
-	return count
+	return total
 
 func upgrade_reload() -> void:
 	_reload_time = max(0.5, _reload_time - RELOAD_STEP)
@@ -591,6 +608,14 @@ func take_damage(amount: int) -> void:
 	if _current_hp == 0:
 		_die()
 
+# Returns false if already at full hull (so the item isn't wasted)
+func heal(amount: int) -> bool:
+	if _current_hp >= _max_segments:
+		return false
+	_current_hp = min(_current_hp + amount, _max_segments)
+	_build_hp_segments()
+	return true
+
 func add_segment() -> void:
 	_max_segments += 1
 	_current_hp    = min(_current_hp + 1, _max_segments)
@@ -607,6 +632,47 @@ func _flash_hit() -> void:
 	await get_tree().create_timer(0.12).timeout
 	if is_instance_valid(self):
 		_visual.color = BASE_COLOR
+
+# ── Item use ──────────────────────────────────────────────────────────────────
+
+func _use_active_item() -> void:
+	var item: Variant = _hotbar[_hotbar_active]
+	if item == null:
+		return
+	# ItemEffects decides what happens and whether the item is used up
+	if ItemEffects.use(item["id"], self):
+		_hotbar[_hotbar_active] = null
+		_refresh_hotbar()
+
+# Returns false if the cylinder is already full
+func instant_reload() -> bool:
+	if _ammo == CYLINDER_CAPACITY and not _reloading:
+		return false
+	_reloading = false
+	_ammo      = CYLINDER_CAPACITY
+	_update_ammo_label()
+	return true
+
+func apply_speed_boost(multiplier: float, seconds: float) -> void:
+	_speed_mult  = multiplier
+	_speed_timer = seconds
+
+func show_message(text: String, seconds: float = 2.5) -> void:
+	if not _message_label:
+		return
+	_message_label.text    = text
+	_message_label.visible = true
+	_message_timer         = seconds
+
+func _tick_timers(delta: float) -> void:
+	if _speed_timer > 0.0:
+		_speed_timer -= delta
+		if _speed_timer <= 0.0:
+			_speed_mult = 1.0
+	if _message_timer > 0.0:
+		_message_timer -= delta
+		if _message_timer <= 0.0:
+			_message_label.visible = false
 
 # ── Audio util ────────────────────────────────────────────────────────────────
 
