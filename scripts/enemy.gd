@@ -12,7 +12,8 @@ const DORMANT_COLOR   := Color(0.35, 0.1,  0.12)
 const AWARE_COLOR     := Color(1.0,  0.15, 0.08)
 const HIT_COLOR       := Color(1.0,  1.0,  1.0)
 const DEAD_COLOR      := Color(0.4,  0.4,  0.4, 0.5)
-const KEY_DROP_CHANCE := 0.02   # 2% — bosses/elites will have much higher rates later
+const KEY_DROP_CHANCE  := 0.02   # 2% — bosses/elites will have much higher rates later
+const ITEM_DROP_CHANCE := 0.25   # 25% — rolls a random item from LootTable
 const STUNNED_COLOR   := Color(0.30, 0.55, 1.00)
 
 var _item_drop_scene := preload("res://scenes/item_drop.tscn")
@@ -122,16 +123,20 @@ func _die() -> void:
 		_sfx_death.play()  # queue_free fires when sound finishes
 	else:
 		queue_free()
-	_try_drop_key()
+	# Key and item rolls are independent — a lucky kill can drop both.
+	# Deferred because _die() usually runs inside a bullet's physics callback,
+	# where Godot doesn't allow adding new physics bodies.
+	if randf() < KEY_DROP_CHANCE:
+		_spawn_drop.call_deferred(true)
+	if randf() < ITEM_DROP_CHANCE:
+		_spawn_drop.call_deferred(false)
 
-func _try_drop_key() -> void:
-	if randf() >= KEY_DROP_CHANCE:
-		return
-	var key    := _item_drop_scene.instantiate()
-	key.is_key  = true
-	get_parent().add_child(key)
-	key.global_position = global_position
-	key.launch(Vector2(randf_range(-80.0, 80.0), randf_range(-80.0, 80.0)))
+func _spawn_drop(is_key: bool) -> void:
+	var drop    := _item_drop_scene.instantiate()
+	drop.is_key  = is_key   # non-key drops roll a random item in their _ready()
+	get_parent().add_child(drop)
+	drop.global_position = global_position
+	drop.launch(Vector2(randf_range(-80.0, 80.0), randf_range(-80.0, 80.0)))
 
 func _flash_hit() -> void:
 	_visual.color = HIT_COLOR
