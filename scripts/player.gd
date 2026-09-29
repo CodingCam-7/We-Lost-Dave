@@ -567,6 +567,21 @@ func upgrade_inventory() -> void:
 	_backpack_panel.visible = _backpack_open
 	_refresh_backpack()
 
+# ── Cutscene control ──────────────────────────────────────────────────────────
+
+# Turned off by the intro while Dave is driven in. Disables movement, weapon,
+# input, the HUD and his flashlight; turning it back on restores all of them.
+func set_controls_enabled(on: bool) -> void:
+	set_physics_process(on)
+	set_process_unhandled_input(on)
+	velocity = Vector2.ZERO
+	$CollisionShape2D.set_deferred("disabled", not on)
+	if _hud_canvas:
+		_hud_canvas.visible = on
+	var light := $DaveLight
+	light.visible      = on
+	light.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+
 # ── Scrap & workbench upgrades ────────────────────────────────────────────────
 
 func get_scrap() -> int:

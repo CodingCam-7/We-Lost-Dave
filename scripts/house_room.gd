@@ -32,6 +32,12 @@ const COLOR_CLOSET   := Color(0.08, 0.07, 0.07)   # very dark
 const COLOR_BACKYARD := Color(0.08, 0.12, 0.06)   # dark outdoor grass
 const COLOR_POOL     := Color(0.05, 0.10, 0.18)   # dark water
 const COLOR_SHED     := Color(0.10, 0.09, 0.08)   # dark wood
+const COLOR_ROAD     := Color(0.07, 0.07, 0.08)   # asphalt
+const COLOR_SIDEWALK := Color(0.20, 0.20, 0.20)   # concrete
+const COLOR_LANE     := Color(0.55, 0.45, 0.12)   # faded yellow centre line
+const COLOR_GATE     := Color(0.13, 0.13, 0.15)   # wrought iron
+
+const AMBIENT_DARK := Color(0.0, 0.0, 0.05)       # normal in-game darkness
 
 var _enemy_scene     := preload("res://scenes/enemy.tscn")
 var _chest_scene     := preload("res://scenes/chest.tscn")
@@ -39,6 +45,7 @@ var _workbench_scene := preload("res://scenes/workbench.tscn")
 
 func _ready() -> void:
 	_build_darkness()
+	_build_street()
 	_build_front_yard()
 	_build_foyer()
 	_build_living_room()
@@ -56,14 +63,17 @@ func _ready() -> void:
 	_build_closet()
 	_spawn_enemies()
 	_spawn_furniture()
+	_build_intro_lamps()
 	_start_ambient()
+	# Intro runs last so every lamp and the player already exist
+	add_child(IntroSequence.new())
 
 # ── Darkness ───────────────────────────────────────────────────────────────────
 
 func _build_darkness() -> void:
 	var mod := CanvasModulate.new()
 	mod.name  = "AmbientDark"
-	mod.color = Color(0.0, 0.0, 0.05)
+	mod.color = AMBIENT_DARK
 	add_child(mod)
 
 # ── Front Yard · Gate · Path · Covered Porch ──────────────────────────────────
@@ -95,6 +105,88 @@ func _build_front_yard() -> void:
 	# Property side fences (south portion — extended northward each step)
 	_wall_v(470, 1100, -700)   # west
 	_wall_v(470, 1100,  700)   # east
+
+# Called by the intro once Dave is through — the gate shuts behind him.
+# Safe to call more than once.
+var _gate: StaticBody2D = null
+
+func close_gate() -> void:
+	if _gate:
+		return
+	_gate = _make_wall(Vector2(0, 1100), Vector2(180, 10))
+	_gate.get_child(0).color = COLOR_GATE
+	add_child(_gate)
+
+# ── Street (intro only — lit, then abandoned) ─────────────────────────────────
+#
+#  Sidewalk:   y: 1100 → 1180 (starts under the fence so there is no gap)   Road: y: 1180 → 1340   Far sidewalk: 1340 → 1390
+#  Runs x: -2600 → 2600 so the car can enter and leave off-screen.
+#  Neighbouring lawns fill the void either side of the property.
+
+func _build_street() -> void:
+	_floor_rect(Rect2(-2600,  400, 1900, 712), COLOR_OUTDOOR)   # west neighbour
+	_floor_rect(Rect2(  700,  400, 1900, 712), COLOR_OUTDOOR)   # east neighbour
+	_floor_rect(Rect2(-2600, 1100, 5200,  80), COLOR_SIDEWALK)
+	_floor_rect(Rect2(-2600, 1180, 5200, 160), COLOR_ROAD)
+	_floor_rect(Rect2(-2600, 1340, 5200,  50), COLOR_SIDEWALK)
+	_floor_rect(Rect2(-2600, 1390, 5200, 300), COLOR_OUTDOOR)
+	# Dashed centre line
+	var x := -2600.0
+	while x < 2600.0:
+		_floor_rect(Rect2(x, 1257, 44, 6), COLOR_LANE)
+		x += 100.0
+
+# ── Intro lamps ────────────────────────────────────────────────────────────────
+#
+#  Every light that's on during the intro. IntroSequence flickers them 5 times
+#  and turns them off for good once Dave reaches the gate.
+
+func _build_intro_lamps() -> void:
+	var sodium := Color(1.00, 0.72, 0.38)   # orange street light
+	var warm   := Color(1.00, 0.88, 0.65)
+	var flood  := Color(0.85, 0.90, 1.00)   # cool security floodlight
+
+	# Street lights along the sidewalk
+	for sx in [-2000, -1400, -800, -350, 350, 800, 1400, 2000]:
+		_add_lamp(Vector2(sx, 1150), sodium, 1.8, 3.8, true)
+	# Gate pillar lamps
+	_add_lamp(Vector2(-115, 1058), warm, 1.1, 1.4, true)
+	_add_lamp(Vector2( 115, 1058), warm, 1.1, 1.4, true)
+	# Porch light over the front door
+	_add_lamp(Vector2(0, 490), warm, 1.8, 2.6, true)
+	# Floodlights on the front corners of the house, washing the yard
+	_add_lamp(Vector2(-640, 500), flood, 1.4, 4.5, true)
+	_add_lamp(Vector2( 640, 500), flood, 1.4, 4.5, true)
+	# Warm glow from inside — every window lit
+	_add_lamp(Vector2(   0,  360), warm, 0.9, 1.6, false)   # foyer
+	_add_lamp(Vector2(   0,    0), warm, 0.8, 2.6, false)   # living room
+	_add_lamp(Vector2(-270,  400), warm, 0.7, 1.5, false)   # study
+	_add_lamp(Vector2( 310,  410), warm, 0.7, 1.5, false)   # bedroom
+	_add_lamp(Vector2(-480, -210), warm, 0.6, 1.8, false)   # kitchen
+	_add_lamp(Vector2( 530, -160), warm, 0.6, 1.8, false)   # dining room
+
+# A lamp = Node2D holding a "Light" and (for visible fixtures) a small "Bulb".
+func _add_lamp(pos: Vector2, color: Color, energy: float, scale: float, has_bulb: bool) -> void:
+	var lamp := Node2D.new()
+	lamp.position = pos
+	lamp.z_index  = 1
+	lamp.add_to_group("intro_lamps")
+
+	var light := LightUtils.make_light(color, energy, scale)
+	light.name    = "Light"
+	light.enabled = false   # IntroSequence switches them on
+	lamp.add_child(light)
+
+	if has_bulb:
+		var bulb := Polygon2D.new()
+		bulb.name    = "Bulb"
+		bulb.color   = color
+		bulb.polygon = PackedVector2Array([
+			Vector2(-6, -6), Vector2(6, -6), Vector2(6, 6), Vector2(-6, 6),
+		])
+		lamp.set_meta("bulb_color", color)
+		lamp.add_child(bulb)
+	add_child(lamp)
 
 # ── Foyer ──────────────────────────────────────────────────────────────────────
 #

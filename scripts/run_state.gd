@@ -7,6 +7,7 @@ extends Node
 
 var scrap:          int        = 0
 var upgrade_levels: Dictionary = {}   # upgrade id -> times purchased
+var intro_played:   bool       = false  # intro cutscene only plays once per launch
 
 func get_level(id: String) -> int:
 	return upgrade_levels.get(id, 0)
